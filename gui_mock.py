@@ -1,7 +1,7 @@
-import sys
 import socket
 import argparse
 import select
+from linuxfd import timerfd
 
 
 def init_parser():
@@ -33,12 +33,14 @@ if __name__ == '__main__':
 		exit(1)
 
 	print(f"listening at port {addr[1]}")
-
 	sock.listen(0)
 
 	epoll = select.epoll()
-
 	epoll.register(sock.fileno(), eventmask=select.EPOLLIN)
+
+	timer = timerfd()
+	timer.settime(1, 1)
+	epoll.register(timer.fileno(), eventmask=select.EPOLLIN)
 
 	clients = {}
 
@@ -49,10 +51,24 @@ if __name__ == '__main__':
 			if fd == sock.fileno():
 				# new client
 				client_sock, client_addr = sock.accept()
-				print(f"new client {addr[0]}:{addr[1]}")
+				print(f"new client {client_addr[0]}:{client_addr[1]}")
 				epoll.register(client_sock.fileno(), eventmask=select.EPOLLIN)
 				clients[client_sock.fileno()] = client_sock
+			elif fd == timer.fileno():
+				ticks = timer.read()
+				for client in clients.values():
+					client.sendall(b"LEFT_KEY_DOWN\n")
+
 			elif fd in clients:
-				client_sock = clients[fd]
-				data = client_sock.recv(1024)
-				print(data)
+				if event_mask & select.EPOLLHUP:
+					client_sock = clients[fd]
+					client_sock.close()
+					epoll.unregister(fd)
+					del clients[fd]
+					print("connection closed")
+					continue
+				if event_mask & select.EPOLLIN:
+					client_sock = clients[fd]
+					data = client_sock.recv(1024)
+					if len(data):
+						print(f"client data: {data}")
