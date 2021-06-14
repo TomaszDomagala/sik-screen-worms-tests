@@ -85,14 +85,6 @@ class Client:
 				server_messages.append(messages.deserialize_stc_message(b_message))
 		return server_messages
 
-	# server_messages = []
-	# while True:
-	# 	msg = self.recv_message()
-	# 	if msg is None:
-	# 		break
-	# 	server_messages.append(msg)
-	# return []
-
 	def close(self):
 		self.sock.close()
 
@@ -148,9 +140,6 @@ class TestServer200(unittest.TestCase):
 
 	def start_server(self, args):
 		return start_server(self.port, args)
-
-	# print(s.pid)
-	# return s
 
 	def test_201(self):
 		server = self.start_server(["-v" "2", "-s 777", "-w 800", "-h 600"])
