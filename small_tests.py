@@ -7,6 +7,9 @@ from typing import List
 import itertools
 import select
 
+SERVER_WAIT_TIME = 1
+MESSAGES_WAIT_TIME = 1
+
 
 def start_server(port, args):
 	"""
@@ -83,6 +86,7 @@ class Client:
 			for (fd, mask) in events:
 				b_message = self.sock.recv(1024)
 				server_messages.append(messages.deserialize_stc_message(b_message))
+		epoll.close()
 		return server_messages
 
 	def close(self):
@@ -117,16 +121,13 @@ class TestServer200(unittest.TestCase):
 		super().__init__(*args, **kwargs)
 
 	def setUp(self) -> None:
-		self.port += 1
+		pass
 
 	def assertContainsEvents(self, expected: messages.ServerMessage, received: List[messages.ServerMessage]):
 		for m in received:
 			self.assertEqual(expected.game_id, m.game_id, "Incorrect game id")
 
 		rec_events: List[messages.Event] = get_events(received)
-
-		# for e in rec_events:
-		# 	print(e)
 
 		def cmp(e1: messages.Event, e2: messages.Event):
 			return e1.event_no == e2.event_no and e1.event_type == e2.event_type and e1.event_data == e2.event_data
@@ -139,16 +140,19 @@ class TestServer200(unittest.TestCase):
 		return Client(self.host, self.port, self.next_session_id, name, ip)
 
 	def start_server(self, args):
-		return start_server(self.port, args)
+		s = start_server(self.port, args)
+		time.sleep(SERVER_WAIT_TIME)  # Wait for server to start.
+		return s
 
 	def test_201(self):
+		self.port = 2201
 		server = self.start_server(["-v" "2", "-s 777", "-w 800", "-h 600"])
 		client0 = self.new_client("Bob201")
 		client1 = self.new_client("Cezary201")
 
 		client0.send_message(1, 0)
 		client1.send_message(1, 0)
-		time.sleep(2)
+		time.sleep(MESSAGES_WAIT_TIME)
 
 		c0_events = client0.pull_events()
 		c1_events = client1.pull_events()
@@ -156,6 +160,8 @@ class TestServer200(unittest.TestCase):
 		client0.close()
 		client1.close()
 		stop_server(server)
+
+		print_events(c0_events)
 
 		expected_events = messages.ServerMessage(777, [
 			event_new_game(0, 800, 600, ["Bob201", "Cezary201"]),
@@ -169,8 +175,8 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c1_events)
 
 	def test_202(self):
+		self.port = 2202
 		server = self.start_server(["-v 2", "-s 3", "-w 100", "-h 200"])
-		print(server.pid)
 
 		client0 = self.new_client("Bob202")
 		client1 = self.new_client("")
@@ -179,7 +185,7 @@ class TestServer200(unittest.TestCase):
 		client0.send_message(1, 0)
 		client1.send_message(0, 0)
 		client2.send_message(-1, 0)
-		time.sleep(2)
+		time.sleep(MESSAGES_WAIT_TIME)
 
 		c0_events = client0.pull_events()
 		c1_events = client1.pull_events()
@@ -190,7 +196,7 @@ class TestServer200(unittest.TestCase):
 		client2.close()
 		stop_server(server)
 
-		# print_events(c0_events)
+		print_events(c0_events)
 
 		expected_events = messages.ServerMessage(3, [
 			event_new_game(0, 100, 200, ["Bob202", "Cezary202"]),
@@ -205,8 +211,8 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c2_events)
 
 	def test_203(self):
+		self.port = 2203
 		server = self.start_server(["-v 2", "-s 2", "-w 800", "-h 600"])
-		print(server.pid)
 
 		client0 = self.new_client("Bob203")
 		client1 = self.new_client("")
@@ -215,7 +221,7 @@ class TestServer200(unittest.TestCase):
 		client0.send_message(1, 0)
 		client1.sock.send(b"\0")
 		client2.send_message(-1, 0)
-		time.sleep(2)
+		time.sleep(MESSAGES_WAIT_TIME)
 
 		c0_events = client0.pull_events()
 		c2_events = client2.pull_events()
@@ -238,6 +244,8 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c2_events)
 
 	def test_204(self):
+		self.port = 2204
+
 		server = self.start_server(["-v 2", "-s 0", "-w 16", "-h 16"])
 		print(server.pid)
 
@@ -246,7 +254,7 @@ class TestServer200(unittest.TestCase):
 
 		client0.send_message(1, 0)
 		client1.send_message(-1, 0)
-		time.sleep(2)
+		time.sleep(MESSAGES_WAIT_TIME)
 
 		c0_events = client0.pull_events()
 		c1_events = client1.pull_events()
@@ -268,6 +276,7 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c1_events)
 
 	def test_205(self):
+		self.port = 2205
 		server = self.start_server(["-v 2", "-s 777", "-w 800", "-h 600"])
 
 		client0 = self.new_client("Bob205", socket.AF_INET6)
@@ -275,7 +284,7 @@ class TestServer200(unittest.TestCase):
 
 		client0.send_message(1, 0)
 		client1.send_message(1, 0)
-		time.sleep(2)
+		time.sleep(MESSAGES_WAIT_TIME)
 
 		c0_events = client0.pull_events()
 		c1_events = client1.pull_events()
@@ -294,3 +303,7 @@ class TestServer200(unittest.TestCase):
 
 		self.assertContainsEvents(expected_events, c0_events)
 		self.assertContainsEvents(expected_events, c1_events)
+
+
+if __name__ == '__main__':
+	unittest.main()
