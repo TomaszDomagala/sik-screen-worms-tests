@@ -54,7 +54,7 @@ def deserialize_stc_message_new_game(b_data) -> DataNewGame:
 	for b_name in b_names:
 		names.append(bytes.decode(b_name, "utf-8"))
 
-	return DataNewGame(max_x, max_y, names)
+	return DataNewGame(max_x, max_y, names[:-1])
 
 
 def deserialize_stc_message_pixel(b_data) -> DataPixel:
