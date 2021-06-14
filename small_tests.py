@@ -17,11 +17,12 @@ def start_server(args):
 	return subprocess.Popen(["./screen-worms-server"] + args)
 
 
-def get_events(server_messages: List[messages.ServerMessage]):
+def get_events(server_messages: List[messages.ServerMessage]) -> List[messages.Event]:
+	return list(itertools.chain.from_iterable(map(lambda x: x.events, server_messages)))
 
 
 class Client:
-	def __init__(self, server_host, server_port, session_id, player_name):
+	def __init__(self, server_host, server_port, session_id, player_name, ip_ver=socket.AF_INET):
 		self.server_host = server_host
 		self.server_port = server_port
 		self.session_id = session_id
@@ -30,7 +31,7 @@ class Client:
 		self.sock = None
 		self.addr = None
 
-		info_list = socket.getaddrinfo(server_host, server_port, family=socket.AF_INET, type=socket.SOCK_DGRAM)
+		info_list = socket.getaddrinfo(server_host, server_port, family=ip_ver, type=socket.SOCK_DGRAM)
 		connected = False
 		for info in info_list:
 			try:
@@ -97,6 +98,14 @@ def event_pixel(event_no, player_no, x, y):
 	return messages.Event(-1, event_no, 1, messages.DataPixel(player_no, x, y), -1)
 
 
+def event_player_eliminated(event_on, player_no):
+	return messages.Event(-1, event_on, 2, messages.DataPlayerEliminated(player_no), -1)
+
+
+def event_game_over(event_no):
+	return messages.Event(-1, event_no, 3, None, -1)
+
+
 class TestServer200(unittest.TestCase):
 	"""
 	Does not check event_len and crc32!!!
@@ -106,7 +115,7 @@ class TestServer200(unittest.TestCase):
 		for m in received:
 			self.assertEqual(expected.game_id, m.game_id, "Incorrect game id")
 
-		rec_events: List[messages.Event] = list(itertools.chain.from_iterable(map(lambda x: x.events, received)))
+		rec_events: List[messages.Event] = get_events(received)
 
 		# for e in rec_events:
 		# 	print(e)
@@ -206,5 +215,55 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c2_events)
 
 	def test_204(self):
+		server = start_server(["-v 2", "-s 0", "-w 16 -h 16"])
+
+		client0 = Client(host, port, 1, "Bob204")
+		client1 = Client(host, port, 2, "Cezary204")
+
+		client0.send_message(1, 0)
+		client1.send_message(-1, 0)
+		time.sleep(2)
+
+		c0_events = client0.pull_events()
+		c1_events = client1.pull_events()
+
+		client0.close()
+		client1.close()
+
+		expected_events = messages.ServerMessage(0, [
+			event_new_game(0, 16, 16, ["Bob204", "Cezary204"]),
+			event_pixel(1, 0, 0, 0),
+			event_player_eliminated(2, 1),
+			event_game_over(3),
+		])
+
+		self.assertContainsEvents(expected_events, c0_events)
+		self.assertContainsEvents(expected_events, c1_events)
+
+	def test_205(self):
+		# server = start_server(["-v 2", "-s 777"])
+		client0 = Client(host, port, 1, "Bob205", socket.AF_INET6)
+		client1 = Client(host, port, 2, "Cezary205", socket.AF_INET6)
+
+		client0.send_message(1, 0)
+		client1.send_message(1, 0)
+		time.sleep(2)
+
+		c0_events = client0.pull_events()
+		c1_events = client1.pull_events()
+
+		client0.close()
+		client1.close()
+
+		expected_events = messages.ServerMessage(777, [
+			event_new_game(0, 800, 600, ["Bob205", "Cezary205"]),
+			event_pixel(1, 0, 771, 99),
+			event_pixel(2, 1, 18, 331),
+			event_pixel(3, 0, 772, 99),
+			event_pixel(4, 1, 17, 330),
+		])
+
+		self.assertContainsEvents(expected_events, c0_events)
+		self.assertContainsEvents(expected_events, c1_events)
 
 # server.kill()
