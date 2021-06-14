@@ -8,17 +8,28 @@ import itertools
 import select
 
 
-def start_server(args):
+def start_server(port, args):
 	"""
 	Run screen worms server in the background
-	:param args: server arguments
+	:param port: server port
+	:param args: server other arguments
 	:return: server process
 	"""
-	return subprocess.Popen(["./screen-worms-server"] + args)
+	return subprocess.Popen(["./screen-worms-server"] + [f"-p {port}"] + args)
+
+
+def stop_server(server):
+	server.kill()
+	server.communicate()
 
 
 def get_events(server_messages: List[messages.ServerMessage]) -> List[messages.Event]:
 	return list(itertools.chain.from_iterable(map(lambda x: x.events, server_messages)))
+
+
+def print_events(server_messages: List[messages.ServerMessage]):
+	for e in get_events(server_messages):
+		print(e)
 
 
 class Client:
@@ -86,10 +97,6 @@ class Client:
 		self.sock.close()
 
 
-host = "localhost"
-port = 2021
-
-
 def event_new_game(event_no, width, height, players):
 	return messages.Event(-1, event_no, 0, messages.DataNewGame(width, height, players), -1)
 
@@ -111,6 +118,15 @@ class TestServer200(unittest.TestCase):
 	Does not check event_len and crc32!!!
 	"""
 
+	def __init__(self, *args, **kwargs):
+		self.host = "localhost"
+		self.port = 2200
+		self.next_session_id = 0
+		super().__init__(*args, **kwargs)
+
+	def setUp(self) -> None:
+		self.port += 1
+
 	def assertContainsEvents(self, expected: messages.ServerMessage, received: List[messages.ServerMessage]):
 		for m in received:
 			self.assertEqual(expected.game_id, m.game_id, "Incorrect game id")
@@ -126,10 +142,20 @@ class TestServer200(unittest.TestCase):
 		for e in expected.events:
 			self.assertEqual(1, len(list(filter(lambda x: cmp(e, x), rec_events))), f"Event {e} not found")
 
+	def new_client(self, name, ip=socket.AF_INET):
+		self.next_session_id += 1
+		return Client(self.host, self.port, self.next_session_id, name, ip)
+
+	def start_server(self, args):
+		return start_server(self.port, args)
+
+	# print(s.pid)
+	# return s
+
 	def test_201(self):
-		# server = start_server(["-v 2", "-s 777"])
-		client0 = Client(host, port, 1, "Bob201")
-		client1 = Client(host, port, 2, "Cezary201")
+		server = self.start_server(["-v" "2", "-s 777", "-w 800", "-h 600"])
+		client0 = self.new_client("Bob201")
+		client1 = self.new_client("Cezary201")
 
 		client0.send_message(1, 0)
 		client1.send_message(1, 0)
@@ -137,10 +163,10 @@ class TestServer200(unittest.TestCase):
 
 		c0_events = client0.pull_events()
 		c1_events = client1.pull_events()
-		# print(c0_events)
 
 		client0.close()
 		client1.close()
+		stop_server(server)
 
 		expected_events = messages.ServerMessage(777, [
 			event_new_game(0, 800, 600, ["Bob201", "Cezary201"]),
@@ -154,11 +180,12 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c1_events)
 
 	def test_202(self):
-		# server = start_server(["-v 2", "-s 3", "-w 100 -h 200"])
+		server = self.start_server(["-v 2", "-s 3", "-w 100", "-h 200"])
+		print(server.pid)
 
-		client0 = Client(host, port, 1, "Bob202")
-		client1 = Client(host, port, 2, "")
-		client2 = Client(host, port, 3, "Cezary202")
+		client0 = self.new_client("Bob202")
+		client1 = self.new_client("")
+		client2 = self.new_client("Cezary202")
 
 		client0.send_message(1, 0)
 		client1.send_message(0, 0)
@@ -172,6 +199,9 @@ class TestServer200(unittest.TestCase):
 		client0.close()
 		client1.close()
 		client2.close()
+		stop_server(server)
+
+		# print_events(c0_events)
 
 		expected_events = messages.ServerMessage(3, [
 			event_new_game(0, 100, 200, ["Bob202", "Cezary202"]),
@@ -186,11 +216,12 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c2_events)
 
 	def test_203(self):
-		# server = start_server(["-v 2", "-s 2", "-w 800 -h 600")
+		server = self.start_server(["-v 2", "-s 2", "-w 800", "-h 600"])
+		print(server.pid)
 
-		client0 = Client(host, port, 1, "Bob203")
-		client1 = Client(host, port, 2, "")
-		client2 = Client(host, port, 3, "Cezary203")
+		client0 = self.new_client("Bob203")
+		client1 = self.new_client("")
+		client2 = self.new_client("Cezary203")
 
 		client0.send_message(1, 0)
 		client1.sock.send(b"\0")
@@ -202,6 +233,9 @@ class TestServer200(unittest.TestCase):
 
 		for client in [client0, client1, client2]:
 			client.close()
+		stop_server(server)
+
+		# print_events(c0_events)
 
 		expected_events = messages.ServerMessage(2, [
 			event_new_game(0, 800, 600, ["Bob203", "Cezary203"]),
@@ -215,10 +249,11 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c2_events)
 
 	def test_204(self):
-		server = start_server(["-v 2", "-s 0", "-w 16 -h 16"])
+		server = self.start_server(["-v 2", "-s 0", "-w 16", "-h 16"])
+		print(server.pid)
 
-		client0 = Client(host, port, 1, "Bob204")
-		client1 = Client(host, port, 2, "Cezary204")
+		client0 = self.new_client("Bob204")
+		client1 = self.new_client("Cezary204")
 
 		client0.send_message(1, 0)
 		client1.send_message(-1, 0)
@@ -229,6 +264,9 @@ class TestServer200(unittest.TestCase):
 
 		client0.close()
 		client1.close()
+		stop_server(server)
+
+		# print_events(c0_events)
 
 		expected_events = messages.ServerMessage(0, [
 			event_new_game(0, 16, 16, ["Bob204", "Cezary204"]),
@@ -241,9 +279,10 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c1_events)
 
 	def test_205(self):
-		# server = start_server(["-v 2", "-s 777"])
-		client0 = Client(host, port, 1, "Bob205", socket.AF_INET6)
-		client1 = Client(host, port, 2, "Cezary205", socket.AF_INET6)
+		server = self.start_server(["-v 2", "-s 777", "-w 800", "-h 600"])
+
+		client0 = self.new_client("Bob205", socket.AF_INET6)
+		client1 = self.new_client("Cezary205", socket.AF_INET6)
 
 		client0.send_message(1, 0)
 		client1.send_message(1, 0)
@@ -254,6 +293,7 @@ class TestServer200(unittest.TestCase):
 
 		client0.close()
 		client1.close()
+		stop_server(server)
 
 		expected_events = messages.ServerMessage(777, [
 			event_new_game(0, 800, 600, ["Bob205", "Cezary205"]),
@@ -265,5 +305,3 @@ class TestServer200(unittest.TestCase):
 
 		self.assertContainsEvents(expected_events, c0_events)
 		self.assertContainsEvents(expected_events, c1_events)
-
-# server.kill()
