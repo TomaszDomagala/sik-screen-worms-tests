@@ -18,12 +18,18 @@ class DataNewGame:
 	max_y: int
 	players_names: List[str]
 
+	def __str__(self):
+		return f"NEW_GAME {self.max_x} {self.max_y} {(' '.join(self.players_names))}"
+
 
 @dataclass
 class DataPixel:
 	player_num: int
 	x: int
 	y: int
+
+	def __str__(self):
+		return f"PIXEL {self.player_num} {self.x} {self.y}"
 
 
 @dataclass
@@ -39,11 +45,18 @@ class Event:
 	event_data: Union[DataNewGame, DataPixel, DataPlayerEliminated]
 	crc32: int
 
+	def __str__(self):
+		return f"ev {self.event_no} {self.event_data}"
+
 
 @dataclass
 class ServerMessage:
 	game_id: int
 	events: List[Event] = field(default_factory=list)
+
+	def __str__(self):
+		events_str = list(map(lambda x: f"game {self.game_id} {x}", self.events))
+		return "\n".join(events_str)
 
 
 def deserialize_stc_message_new_game(b_data) -> DataNewGame:

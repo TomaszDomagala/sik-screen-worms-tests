@@ -4,7 +4,7 @@ import select
 import string
 import time
 from linuxfd import timerfd
-import messages
+import communication
 import random
 
 
@@ -62,7 +62,7 @@ if __name__ == '__main__':
 		for (fd, event_mask) in epoll_events:
 			if fd == timer.fileno():
 				timer.read()
-				m_client = messages.serialize_cts_message(args.session, 1, next_event_no, args.name)
+				m_client = communication.serialize_cts_message(args.session, 1, next_event_no, args.name)
 				if sock.send(m_client) != len(m_client):
 					print("partial send")
 				print(f"neen={next_event_no} sent {len(m_client)} bytes to server")
@@ -71,7 +71,7 @@ if __name__ == '__main__':
 				b_message = sock.recv(1024)
 				print(f"neen={next_event_no} received {len(b_message)} bytes from server")
 				try:
-					mess = messages.deserialize_stc_message(b_message)
+					mess = communication.deserialize_stc_message(b_message)
 				except Exception as err:
 					print(len(b_message))
 					print(b_message)
