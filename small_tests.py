@@ -9,13 +9,15 @@ import select
 
 SERVER_WAIT_TIME = 1
 MESSAGES_WAIT_TIME = 1
+SEND_MESSAGE_WAIT = 0.01
+EPOLL_TIMEOUT = 0
 HOST = "localhost"
 
 # Path to the server binary
 SERVER_PATH = "/home/tom/rep/sik-screen-worms/build/screen-worms-server"
 
 # debug
-PRINT_RECEIVED_MESSAGES = False
+PRINT_RECEIVED_MESSAGES = True
 
 
 def start_server(port, args):
@@ -70,10 +72,11 @@ class Client:
 		if not connected:
 			raise ConnectionError("Cannot connect to the server")
 
-	def send_message(self, turn_direction, next_expected_event_no):
+	def send_message(self, turn_direction, next_expected_event_no=0):
 		msg = communication.serialize_cts_message(self.session_id, turn_direction, next_expected_event_no,
 												  self.player_name)
 		self.sock.send(msg)
+		time.sleep(SEND_MESSAGE_WAIT)
 
 	def recv_message(self):
 		try:
@@ -88,7 +91,7 @@ class Client:
 
 		server_messages = []
 		while True:
-			events = epoll.poll(timeout=2, maxevents=-1)
+			events = epoll.poll(timeout=EPOLL_TIMEOUT, maxevents=-1)
 			if len(events) == 0:
 				break
 			for (fd, mask) in events:
@@ -117,6 +120,10 @@ def event_game_over(event_no):
 	return communication.Event(-1, event_no, 3, None, -1)
 
 
+def events_equal(e1: communication.Event, e2: communication.Event):
+	return e1.event_no == e2.event_no and e1.event_type == e2.event_type and e1.event_data == e2.event_data
+
+
 class TestServer200(unittest.TestCase):
 	"""
 	Does not check event_len and crc32!!!
@@ -133,16 +140,16 @@ class TestServer200(unittest.TestCase):
 		stop_server(self.server)
 
 	def assertContainsEvents(self, expected: communication.ServerMessage, received: List[communication.ServerMessage]):
+		if PRINT_RECEIVED_MESSAGES:
+			print_events(received)
+
 		for m in received:
 			self.assertEqual(expected.game_id, m.game_id, "Incorrect game id")
 
 		rec_events: List[communication.Event] = get_events(received)
-
-		def cmp(e1: communication.Event, e2: communication.Event):
-			return e1.event_no == e2.event_no and e1.event_type == e2.event_type and e1.event_data == e2.event_data
-
 		for e in expected.events:
-			self.assertEqual(1, len(list(filter(lambda x: cmp(e, x), rec_events))), f"Event {e} not found")
+			num = len(list(filter(lambda x: events_equal(e, x), rec_events)))
+			self.assertLessEqual(1, num, f"Event {e} not found")
 
 	def new_client(self, name, ip=socket.AF_INET):
 		self.next_session_id += 1
@@ -153,21 +160,20 @@ class TestServer200(unittest.TestCase):
 
 	def assertClientReceived(self, client: Client, expected: communication.ServerMessage):
 		received = client.pull_events()
-		if PRINT_RECEIVED_MESSAGES:
-			print_events(received)
 		self.assertContainsEvents(expected, received)
 
 	def assertClientsReceived(self, clients: List[Client], expected: communication.ServerMessage):
 		for client in clients:
 			self.assertClientReceived(client, expected)
 
-	def start_server(self, args):
+	def start_server(self, seed, width=800, height=600, rounds_per_sec=2):
+		args = [f"-s {seed}", f"-v {rounds_per_sec}", f"-w {width}", f"-h {height}"]
 		s = start_server(self.port, args)
 		time.sleep(SERVER_WAIT_TIME)  # Wait for server to start.
 		return s
 
 	def test_201(self):
-		self.server = self.start_server(["-v" "2", "-s 777", "-w 800", "-h 600"])
+		self.server = self.start_server(777)
 		self.clients = self.new_clients(["Bob201", "Cezary201"])
 
 		self.clients[0].send_message(1, 0)
@@ -185,7 +191,7 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_202(self):
-		self.server = self.start_server(["-v 2", "-s 3", "-w 100", "-h 200"])
+		self.server = self.start_server(3, 100, 200)
 		self.clients = self.new_clients(["Bob202", "", "Cezary202"])
 
 		self.clients[0].send_message(1, 0)
@@ -204,7 +210,7 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_203(self):
-		self.server = self.start_server(["-v 2", "-s 2", "-w 800", "-h 600"])
+		self.server = self.start_server(2)
 		self.clients = self.new_clients(["Bob203", "", "Cezary203"])
 
 		self.clients[0].send_message(1, 0)
@@ -224,7 +230,7 @@ class TestServer200(unittest.TestCase):
 		self.assertClientReceived(self.clients[2], expected_events)
 
 	def test_204(self):
-		self.server = self.start_server(["-v" "2", "-s 777", "-w 800", "-h 600"])
+		self.server = self.start_server(777)
 		self.clients = self.new_clients(["Bob201", "Cezary201"], socket.AF_INET6)
 
 		self.clients[0].send_message(1, 0)
@@ -240,6 +246,153 @@ class TestServer200(unittest.TestCase):
 		])
 
 		self.assertClientsReceived(self.clients, expected_events)
+
+	def test_205(self):
+		self.server = self.start_server(65535, 2048, 2048)
+		self.clients = self.new_clients(["Bob206", "Ala206"], socket.AF_INET6)
+
+		self.clients[0].send_message(1, 0)
+		self.clients[1].send_message(2, 0)
+		time.sleep(MESSAGES_WAIT_TIME)
+
+		expected_events = communication.ServerMessage(65535, [
+			event_new_game(0, 2048, 2048, ["Ala206", "Bob206"]),
+			event_pixel(1, 0, 1250, 789),
+			event_pixel(2, 1, 1415, 1456),
+			event_pixel(3, 0, 1250, 790),
+			event_pixel(4, 1, 1415, 1457),
+		])
+
+		self.assertClientsReceived(self.clients, expected_events)
+
+	def test_206(self):
+		self.server = self.start_server(7)
+		self.clients = self.new_clients(["Cezary207", "Ala207", "Bob207"])
+
+		self.clients[0].send_message(3, 0)
+		self.clients[1].send_message(1, 0)
+		self.clients[2].send_message(2, 0)
+		time.sleep(MESSAGES_WAIT_TIME)
+
+		expected_events = communication.ServerMessage(7, [
+			event_new_game(0, 800, 600, ["Ala207", "Bob207"]),
+			event_pixel(1, 0, 711, 141),
+			event_pixel(2, 1, 394, 3),
+			event_pixel(3, 0, 712, 142),
+			event_pixel(4, 1, 393, 3),
+		])
+
+		self.assertClientsReceived(self.clients[1:], expected_events)
+
+	def test_207(self):
+		self.server = self.start_server(8)
+		self.clients = self.new_clients([" ", "Ala208", "Bob208"])
+
+		self.clients[0].send_message(1, 0)
+		self.clients[1].send_message(1, 0)
+		self.clients[2].send_message(2, 0)
+		time.sleep(MESSAGES_WAIT_TIME)
+
+		expected_events = communication.ServerMessage(8, [
+			event_new_game(0, 800, 600, ["Ala208", "Bob208"]),
+			event_pixel(1, 0, 584, 278),
+			event_pixel(2, 1, 271, 471),
+			event_pixel(3, 0, 584, 279),
+			event_pixel(4, 1, 271, 470),
+		])
+
+		self.assertClientsReceived(self.clients[1:], expected_events)
+
+	def test_208(self):
+		self.server = self.start_server(9)
+		self.clients = self.new_clients(["\0", "Ala209", "Bob209"])
+
+		self.clients[0].send_message(2)
+		self.clients[1].send_message(1)
+		self.clients[2].send_message(2)
+		time.sleep(MESSAGES_WAIT_TIME)
+
+		expected_events = communication.ServerMessage(9, [
+			event_new_game(0, 800, 600, ["Ala209", "Bob209"]),
+			event_pixel(1, 0, 457, 415),
+			event_pixel(2, 1, 239, 448),
+			event_pixel(3, 0, 458, 416),
+			event_pixel(4, 1, 239, 449),
+		])
+
+		self.assertClientsReceived(self.clients, expected_events)
+
+	def test_209(self):
+		self.server = self.start_server(10)
+		self.clients = self.new_clients(["abcdefghijklmnopqrstu", "ala210", "bob210"])
+
+		self.clients[0].send_message(2)
+		self.clients[1].send_message(1)
+		self.clients[2].send_message(2)
+		time.sleep(MESSAGES_WAIT_TIME)
+
+		expected_events = communication.ServerMessage(10, [
+			event_new_game(0, 800, 600, ["ala210", "bob210"]),
+			event_pixel(1, 0, 330, 552),
+			event_pixel(2, 1, 207, 316),
+			event_pixel(3, 0, 329, 553),
+			event_pixel(4, 1, 206, 316),
+		])
+
+		self.assertClientsReceived(self.clients[1:], expected_events)
+
+	def test_210(self):
+		self.server = self.start_server(11)
+		self.clients = [self.new_client("Ala211", socket.AF_INET), self.new_client("Bob211", socket.AF_INET6)]
+
+		self.clients[0].send_message(0)
+		self.clients[1].send_message(1)
+		self.clients[0].send_message(1)
+		time.sleep(MESSAGES_WAIT_TIME)
+
+		expected_events = communication.ServerMessage(11, [
+			event_new_game(0, 800, 600, ["Ala211", "Bob211"]),
+			event_pixel(1, 0, 203, 580),
+			event_pixel(2, 1, 84, 293),
+			event_pixel(3, 0, 203, 581),
+			event_pixel(4, 1, 85, 293),
+		])
+		self.assertClientsReceived(self.clients, expected_events)
+
+	def test_211(self):
+		self.server = self.start_server(12)
+		self.clients = self.new_clients(["Ala212", "Bob212"])
+
+		self.clients[0].send_message(1, 0)
+		self.clients[1].send_message(1, 0)
+		time.sleep(1)
+		self.clients[0].send_message(1, 1)
+		time.sleep(1)
+
+		events = [
+			event_new_game(0, 800, 600, ["Ala212", "Bob212"]),
+			event_pixel(1, 0, 76, 117),
+			event_pixel(2, 1, 52, 161),
+			event_pixel(3, 0, 75, 118),
+			event_pixel(4, 1, 52, 162),
+			event_pixel(5, 0, 74, 118),
+			event_pixel(6, 1, 53, 163),
+		]
+		expected_events = communication.ServerMessage(12, events)
+
+		c0_messages = self.clients[0].pull_events()
+		c1_messages = self.clients[1].pull_events()
+
+		# Check for all messages.
+		self.assertContainsEvents(expected_events, c0_messages)
+		self.assertContainsEvents(expected_events, c1_messages)
+
+		# Check for duplicates in client 0.
+		c0_events = get_events(c0_messages)
+
+		for dup_event in events[1:5]:
+			num = len(list(filter(lambda x: events_equal(dup_event, x), c0_events)))
+			self.assertEqual(2, num, f"Event ({dup_event}) is not duplicated")
 
 
 if __name__ == '__main__':
