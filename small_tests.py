@@ -177,6 +177,11 @@ class TestServer200(unittest.TestCase):
 		return s
 
 	def test_201(self):
+		"""
+		Parametry serwera: -v 2 -s 777 -w 800 -h 600
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = Bob201
+		Klient 1: turn_direction = 2, next_expected_event_no = 0, player_name = Cezary201
+		"""
 		self.server = self.start_server(777)
 		self.clients = self.new_clients(["Bob201", "Cezary201"])
 
@@ -195,6 +200,12 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_202(self):
+		"""
+		Parametry serwera: -v 2 -s 3 -h 200 -w 100
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = Bob202
+		Klient 1: turn_direction = 0, next_expected_event_no = 0, bez nazwy gracza
+		Klient 2: turn_direction = 2, next_expected_event_no = 0, player_name = Cezary202
+		"""
 		self.server = self.start_server(3, 100, 200)
 		self.clients = self.new_clients(["Bob202", "", "Cezary202"])
 
@@ -214,6 +225,12 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_203(self):
+		"""
+		Parametry serwera: -v 2 -s 2 -w 800 -h 600
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = Bob203
+		Klient 1: za krótki komunikat – jeden bajt o wartości 0
+		Klient 2: turn_direction = 2, next_expected_event_no = 0, player_name = Cezary203
+		"""
 		self.server = self.start_server(2)
 		self.clients = self.new_clients(["Bob203", "", "Cezary203"])
 
@@ -234,6 +251,11 @@ class TestServer200(unittest.TestCase):
 		self.assertClientReceived(self.clients[2], expected_events)
 
 	def test_204(self):
+		"""
+		Parametry serwera: -v 2 -s 777 -w 800 -h 600
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = Bob205, używa IPv6
+		Klient 1: turn_direction = 2, next_expected_event_no = 0, player_name = Cezary205, używa IPv6
+		"""
 		self.server = self.start_server(777)
 		self.clients = self.new_clients(["Bob201", "Cezary201"], socket.AF_INET6)
 
@@ -252,6 +274,12 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_205(self):
+		"""
+		Parametry serwera: -v 2 -s 65535 -h 2048 -w 2048
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = Bob206, używa IPv6
+		Klient 1: turn_direction = 2, next_expected_event_no = 0, player_name = Ala206, używa IPv6
+		Sprawdza sortowanie nazw graczy.
+		"""
 		self.server = self.start_server(65535, 2048, 2048)
 		self.clients = self.new_clients(["Bob206", "Ala206"], socket.AF_INET6)
 
@@ -270,6 +298,13 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_206(self):
+		"""
+		Parametry serwera: -v 2 -s 7 -w 800 -h 600
+		Klient 0: turn_direction = 3, next_expected_event_no = 0, player_name = Cezary207
+		Klient 1: turn_direction = 1, next_expected_event_no = 0, player_name = Ala207
+		Klient 2: turn_direction = 2, next_expected_event_no = 0, player_name = Bob207
+		Klient 0 wysyła błędną wartość turn_direction.
+		"""
 		self.server = self.start_server(7)
 		self.clients = self.new_clients(["Cezary207", "Ala207", "Bob207"])
 
@@ -289,6 +324,12 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients[1:], expected_events)
 
 	def test_207(self):
+		"""
+		Parametry serwera: -v 2 -s 8 -w 800 -h 600
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, błędna nazwa gracza – pojedyncza spacja
+		Klient 1: turn_direction = 1, next_expected_event_no = 0, player_name = Ala208
+		Klient 2: turn_direction = 2, next_expected_event_no = 0, player_name = Bob208
+		"""
 		self.server = self.start_server(8)
 		self.clients = self.new_clients([" ", "Ala208", "Bob208"])
 
@@ -308,6 +349,12 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients[1:], expected_events)
 
 	def test_208(self):
+		"""
+		Parametry serwera: -v 2 -s 9 -w 800 -h 600
+		Klient 0: turn_direction = 2, next_expected_event_no = 0, błędna nazwa gracza – znak o kodzie 0
+		Klient 1: turn_direction = 1, next_expected_event_no = 0, player_name = Ala209
+		Klient 2: turn_direction = 2, next_expected_event_no = 0, player_name = Bob209
+		"""
 		self.server = self.start_server(9)
 		self.clients = self.new_clients(["\0", "Ala209", "Bob209"])
 
@@ -327,6 +374,13 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_209(self):
+		"""
+		Parametry serwera: -v 2 -s 10 -w 800 -h 600
+		Klient 0: turn_direction = 2, next_expected_event_no = 0, player_name = abcdefghijklmnopqrstu
+		Klient 1: turn_direction = 1, next_expected_event_no = 0, player_name = ala210
+		Klient 2: turn_direction = 2, next_expected_event_no = 0, player_name = bob210
+		Błędna nazwa gracza – klient 0 wysyła za długą nazwę gracza (21 znaków).
+		"""
 		self.server = self.start_server(10)
 		self.clients = self.new_clients(["abcdefghijklmnopqrstu", "ala210", "bob210"])
 
@@ -346,6 +400,12 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients[1:], expected_events)
 
 	def test_210(self):
+		"""
+		Parametry serwera: -v 2 -s 11 -w 800 -h 600
+		Klient 0: turn_direction = 0, next_expected_event_no = 0, player_name = Ala211, używa IPv4
+		Klient 1: turn_direction = 1, next_expected_event_no = 0, player_name = Bob211, używa IPv6
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = Ala211, używa IPv4
+		"""
 		self.server = self.start_server(11)
 		self.clients = [self.new_client("Ala211", socket.AF_INET), self.new_client("Bob211", socket.AF_INET6)]
 
@@ -364,6 +424,12 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_211(self):
+		"""
+		Parametry serwera: -v 2 -s 12 -w 800 -h 600
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = Ala212
+		Klient 1: turn_direction = 1, next_expected_event_no = 0, player_name = Bob212
+		Klient 0: turn_direction = 1, next_expected_event_no = 1, player_name = Ala212
+		"""
 		self.server = self.start_server(12)
 		self.clients = self.new_clients(["Ala212", "Bob212"])
 
@@ -391,7 +457,7 @@ class TestServer200(unittest.TestCase):
 		self.assertContainsEvents(expected_events, c0_messages)
 		self.assertContainsEvents(expected_events, c1_messages)
 
-		# Check for duplicates in client 0.
+		# Check for duplicates in client0.
 		c0_events = get_events(c0_messages)
 
 		for dup_event in events[1:5]:
@@ -399,12 +465,19 @@ class TestServer200(unittest.TestCase):
 			self.assertEqual(2, num, f"Event ({dup_event}) is not duplicated")
 
 	def test_212(self):
+		"""
+		Parametry serwera: -v 2 -s 13 -w 800 -h 600
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = Alicja213
+		Klient 1: turn_direction = 1, next_expected_event_no = 0, player_name = Bolek213
+		Klient 2: turn_direction = 1, next_expected_event_no = 0, player_name = Cezary213
+		Gracz Cezary213 nie załapuje się na rozgrywkę.
+		"""
 		self.server = self.start_server(13)
-		self.clients = self.new_clients(["Ala213", "Bob213", "Cezary213"])
+		self.clients = self.new_clients(["Alicja213", "Bolek213", "Cezary213"])
 
-		# I don't know how official tests are implemented, but
+		# I don't know how the official tests are implemented, but
 		# this test probably does not makes sense with zero AFTER_MSG_WAIT
-		# because messages not always would be sent one after another.
+		# because messages not always would be sent in the same order.
 		global AFTER_MSG_WAIT
 		AFTER_MSG_WAIT = 0.01
 
@@ -414,7 +487,7 @@ class TestServer200(unittest.TestCase):
 		time.sleep(MESSAGES_WAIT_TIME)
 
 		expected_events = communication.ServerMessage(13, [
-			event_new_game(0, 800, 600, ["Ala213", "Bob213"]),
+			event_new_game(0, 800, 600, ["Alicja213", "Bolek213"]),
 			event_pixel(1, 0, 749, 254),
 			event_pixel(2, 1, 20, 29),
 			event_pixel(3, 0, 749, 255),
@@ -424,6 +497,12 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_213(self):
+		"""
+		Parametry serwera: -v 2 -s 14 -w 800 -h 600
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = ala214
+		Klient 1: turn_direction = 2, next_expected_event_no = 0, player_name = abcdefghijklmnopqrst
+		Klient 1 wysyła nazwę gracza o maksymalnej długości (20 znaków).
+		"""
 		self.server = self.start_server(14)
 		self.clients = self.new_clients(["ala214", "abcdefghijklmnopqrst"])
 
@@ -442,8 +521,15 @@ class TestServer200(unittest.TestCase):
 		self.assertClientsReceived(self.clients, expected_events)
 
 	def test_214(self):
+		"""
+		Parametry serwera: -v 2 -s 15 -w 800 -h 600
+		Klient 0: turn_direction = 1, next_expected_event_no = 0, player_name = Ala215
+		Tu jest przerwa 3 sekundy. Ala215 zostaje odłączona.
+		Klient 1: turn_direction = 1, next_expected_event_no = 0, player_name = Bobek215
+		Klient 2: turn_direction = 1, next_expected_event_no = 0, player_name = Cezary215
+		"""
 		self.server = self.start_server(15)
-		self.clients = self.new_clients(["Ala215", "Bob215", "Cezary215"])
+		self.clients = self.new_clients(["Ala215", "Bobek215", "Cezary215"])
 
 		self.clients[0].send_message(1)
 		time.sleep(3)
@@ -452,7 +538,7 @@ class TestServer200(unittest.TestCase):
 		time.sleep(MESSAGES_WAIT_TIME)
 
 		expected_events = communication.ServerMessage(15, [
-			event_new_game(0, 800, 600, ["Bob215", "Cezary215"]),
+			event_new_game(0, 800, 600, ["Bobek215", "Cezary215"]),
 			event_pixel(1, 0, 495, 528),
 			event_pixel(2, 1, 665, 474),
 			event_pixel(3, 0, 494, 529),
