@@ -6,20 +6,9 @@ import time
 from typing import List
 import itertools
 import select
+import configparser
 
-SERVER_WAIT_TIME = 0.5
-MESSAGES_WAIT_TIME = 1
-AFTER_MSG_WAIT = 0.01
-EPOLL_TIMEOUT = 0
-HOST = "localhost"
-
-# Path to the server binary
-SERVER_PATH = "/home/tom/rep/sik-screen-worms/build/screen-worms-server"
-
-# debug
-PRINT_RECEIVED_MESSAGES = False
-PRINT_SERVER_STDOUT = True
-PRINT_SERVER_STDERR = False
+config = configparser.ConfigParser()
 
 
 def start_server(port, args):
@@ -29,9 +18,9 @@ def start_server(port, args):
 	:param args: server other arguments
 	:return: server process
 	"""
-	out = None if PRINT_SERVER_STDOUT else subprocess.DEVNULL
-	err = None if PRINT_SERVER_STDERR else subprocess.DEVNULL
-	return subprocess.Popen([SERVER_PATH] + [f"-p {port}"] + args, stdout=out, stderr=err)
+	out = None if config.getboolean("TESTS_200_DEBUG", "PRINT_SERVER_STDOUT") else subprocess.DEVNULL
+	err = None if config.getboolean("TESTS_200_DEBUG", "PRINT_SERVER_STDERR") else subprocess.DEVNULL
+	return subprocess.Popen([config.get("TESTS_200", "SERVER_PATH")] + [f"-p {port}"] + args, stdout=out, stderr=err)
 
 
 def stop_server(server):
@@ -80,7 +69,7 @@ class Client:
 		msg = communication.serialize_cts_message(self.session_id, turn_direction, next_expected_event_no,
 												  self.player_name)
 		self.sock.send(msg)
-		time.sleep(AFTER_MSG_WAIT)
+		time.sleep(config.getfloat("TESTS_200", "AFTER_MSG_WAIT"))
 
 	def recv_message(self):
 		try:
@@ -95,7 +84,7 @@ class Client:
 
 		server_messages = []
 		while True:
-			events = epoll.poll(timeout=EPOLL_TIMEOUT, maxevents=-1)
+			events = epoll.poll(timeout=config.getfloat("TESTS_200", "EPOLL_TIMEOUT"), maxevents=-1)
 			if len(events) == 0:
 				break
 			for (fd, mask) in events:
@@ -144,7 +133,7 @@ class TestServer200(unittest.TestCase):
 		stop_server(self.server)
 
 	def assertContainsEvents(self, expected: communication.ServerMessage, received: List[communication.ServerMessage]):
-		if PRINT_RECEIVED_MESSAGES:
+		if config.getboolean("TESTS_200_DEBUG", "PRINT_RECEIVED_MESSAGES"):
 			print_events(received)
 
 		for m in received:
@@ -157,7 +146,7 @@ class TestServer200(unittest.TestCase):
 
 	def new_client(self, name, ip=socket.AF_INET):
 		self.next_session_id += 1
-		return Client(HOST, self.port, self.next_session_id, name, ip)
+		return Client(config.get("TESTS_200", "HOST"), self.port, self.next_session_id, name, ip)
 
 	def new_clients(self, names, ip=socket.AF_INET):
 		return list(map(lambda name: self.new_client(name, ip), names))
@@ -173,8 +162,11 @@ class TestServer200(unittest.TestCase):
 	def start_server(self, seed, width=800, height=600, rounds_per_sec=2):
 		args = [f"-s {seed}", f"-v {rounds_per_sec}", f"-w {width}", f"-h {height}"]
 		s = start_server(self.port, args)
-		time.sleep(SERVER_WAIT_TIME)  # Wait for server to start.
+		time.sleep(config.getfloat("TESTS_200", "SERVER_INIT_TIME"))  # Wait for server to start.
 		return s
+
+	def wait_server(self):
+		time.sleep(config.getfloat("TESTS_200", "SERVER_RUN_TIME"))
 
 	def test_201(self):
 		"""
@@ -187,7 +179,7 @@ class TestServer200(unittest.TestCase):
 
 		self.clients[0].send_message(1, 0)
 		self.clients[1].send_message(2, 0)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(777, [
 			event_new_game(0, 800, 600, ["Bob201", "Cezary201"]),
@@ -212,7 +204,7 @@ class TestServer200(unittest.TestCase):
 		self.clients[0].send_message(1, 0)
 		self.clients[1].send_message(0, 0)
 		self.clients[2].send_message(2, 0)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(3, [
 			event_new_game(0, 100, 200, ["Bob202", "Cezary202"]),
@@ -237,7 +229,7 @@ class TestServer200(unittest.TestCase):
 		self.clients[0].send_message(1, 0)
 		self.clients[1].sock.send(b"\0")
 		self.clients[2].send_message(2, 0)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(2, [
 			event_new_game(0, 800, 600, ["Bob203", "Cezary203"]),
@@ -261,7 +253,7 @@ class TestServer200(unittest.TestCase):
 
 		self.clients[0].send_message(1, 0)
 		self.clients[1].send_message(2, 0)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(777, [
 			event_new_game(0, 800, 600, ["Bob201", "Cezary201"]),
@@ -285,7 +277,7 @@ class TestServer200(unittest.TestCase):
 
 		self.clients[0].send_message(1, 0)
 		self.clients[1].send_message(2, 0)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(65535, [
 			event_new_game(0, 2048, 2048, ["Ala206", "Bob206"]),
@@ -311,7 +303,7 @@ class TestServer200(unittest.TestCase):
 		self.clients[0].send_message(3, 0)
 		self.clients[1].send_message(1, 0)
 		self.clients[2].send_message(2, 0)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(7, [
 			event_new_game(0, 800, 600, ["Ala207", "Bob207"]),
@@ -336,7 +328,7 @@ class TestServer200(unittest.TestCase):
 		self.clients[0].send_message(1, 0)
 		self.clients[1].send_message(1, 0)
 		self.clients[2].send_message(2, 0)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(8, [
 			event_new_game(0, 800, 600, ["Ala208", "Bob208"]),
@@ -361,7 +353,7 @@ class TestServer200(unittest.TestCase):
 		self.clients[0].send_message(2)
 		self.clients[1].send_message(1)
 		self.clients[2].send_message(2)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(9, [
 			event_new_game(0, 800, 600, ["Ala209", "Bob209"]),
@@ -387,7 +379,7 @@ class TestServer200(unittest.TestCase):
 		self.clients[0].send_message(2)
 		self.clients[1].send_message(1)
 		self.clients[2].send_message(2)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(10, [
 			event_new_game(0, 800, 600, ["ala210", "bob210"]),
@@ -412,7 +404,7 @@ class TestServer200(unittest.TestCase):
 		self.clients[0].send_message(0)
 		self.clients[1].send_message(1)
 		self.clients[0].send_message(1)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(11, [
 			event_new_game(0, 800, 600, ["Ala211", "Bob211"]),
@@ -472,19 +464,17 @@ class TestServer200(unittest.TestCase):
 		Klient 2: turn_direction = 1, next_expected_event_no = 0, player_name = Cezary213
 		Gracz Cezary213 nie załapuje się na rozgrywkę.
 		"""
-		self.server = self.start_server(13)
-		self.clients = self.new_clients(["Alicja213", "Bolek213", "Cezary213"])
-
 		# I don't know how the official tests are implemented, but
 		# this test probably does not makes sense with zero AFTER_MSG_WAIT
 		# because messages not always would be sent in the same order.
-		global AFTER_MSG_WAIT
-		AFTER_MSG_WAIT = 0.01
+
+		self.server = self.start_server(13)
+		self.clients = self.new_clients(["Alicja213", "Bolek213", "Cezary213"])
 
 		self.clients[0].send_message(1)
 		self.clients[1].send_message(1)
 		self.clients[2].send_message(1)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(13, [
 			event_new_game(0, 800, 600, ["Alicja213", "Bolek213"]),
@@ -508,7 +498,7 @@ class TestServer200(unittest.TestCase):
 
 		self.clients[0].send_message(1)
 		self.clients[1].send_message(2)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(14, [
 			event_new_game(0, 800, 600, ["abcdefghijklmnopqrst", "ala214"]),
@@ -535,7 +525,7 @@ class TestServer200(unittest.TestCase):
 		time.sleep(3)
 		self.clients[1].send_message(1)
 		self.clients[2].send_message(1)
-		time.sleep(MESSAGES_WAIT_TIME)
+		self.wait_server()
 
 		expected_events = communication.ServerMessage(15, [
 			event_new_game(0, 800, 600, ["Bobek215", "Cezary215"]),
@@ -550,4 +540,5 @@ class TestServer200(unittest.TestCase):
 
 
 if __name__ == '__main__':
+	config.read("test_config.ini")
 	unittest.main()
