@@ -7,9 +7,9 @@ from typing import List
 import itertools
 import select
 
-SERVER_WAIT_TIME = 1
+SERVER_WAIT_TIME = 0.5
 MESSAGES_WAIT_TIME = 1
-SEND_MESSAGE_WAIT = 0.01
+AFTER_MSG_WAIT = 0.01
 EPOLL_TIMEOUT = 0
 HOST = "localhost"
 
@@ -17,7 +17,9 @@ HOST = "localhost"
 SERVER_PATH = "/home/tom/rep/sik-screen-worms/build/screen-worms-server"
 
 # debug
-PRINT_RECEIVED_MESSAGES = True
+PRINT_RECEIVED_MESSAGES = False
+PRINT_SERVER_STDOUT = True
+PRINT_SERVER_STDERR = False
 
 
 def start_server(port, args):
@@ -27,7 +29,9 @@ def start_server(port, args):
 	:param args: server other arguments
 	:return: server process
 	"""
-	return subprocess.Popen([SERVER_PATH] + [f"-p {port}"] + args)
+	out = None if PRINT_SERVER_STDOUT else subprocess.DEVNULL
+	err = None if PRINT_SERVER_STDERR else subprocess.DEVNULL
+	return subprocess.Popen([SERVER_PATH] + [f"-p {port}"] + args, stdout=out, stderr=err)
 
 
 def stop_server(server):
@@ -76,7 +80,7 @@ class Client:
 		msg = communication.serialize_cts_message(self.session_id, turn_direction, next_expected_event_no,
 												  self.player_name)
 		self.sock.send(msg)
-		time.sleep(SEND_MESSAGE_WAIT)
+		time.sleep(AFTER_MSG_WAIT)
 
 	def recv_message(self):
 		try:
@@ -393,6 +397,70 @@ class TestServer200(unittest.TestCase):
 		for dup_event in events[1:5]:
 			num = len(list(filter(lambda x: events_equal(dup_event, x), c0_events)))
 			self.assertEqual(2, num, f"Event ({dup_event}) is not duplicated")
+
+	def test_212(self):
+		self.server = self.start_server(13)
+		self.clients = self.new_clients(["Ala213", "Bob213", "Cezary213"])
+
+		# I don't know how official tests are implemented, but
+		# this test probably does not makes sense with zero AFTER_MSG_WAIT
+		# because messages not always would be sent one after another.
+		global AFTER_MSG_WAIT
+		AFTER_MSG_WAIT = 0.01
+
+		self.clients[0].send_message(1)
+		self.clients[1].send_message(1)
+		self.clients[2].send_message(1)
+		time.sleep(MESSAGES_WAIT_TIME)
+
+		expected_events = communication.ServerMessage(13, [
+			event_new_game(0, 800, 600, ["Ala213", "Bob213"]),
+			event_pixel(1, 0, 749, 254),
+			event_pixel(2, 1, 20, 29),
+			event_pixel(3, 0, 749, 255),
+			event_pixel(4, 1, 20, 28),
+		])
+
+		self.assertClientsReceived(self.clients, expected_events)
+
+	def test_213(self):
+		self.server = self.start_server(14)
+		self.clients = self.new_clients(["ala214", "abcdefghijklmnopqrst"])
+
+		self.clients[0].send_message(1)
+		self.clients[1].send_message(2)
+		time.sleep(MESSAGES_WAIT_TIME)
+
+		expected_events = communication.ServerMessage(14, [
+			event_new_game(0, 800, 600, ["abcdefghijklmnopqrst", "ala214"]),
+			event_pixel(1, 0, 622, 391),
+			event_pixel(2, 1, 697, 6),
+			event_pixel(3, 0, 621, 391),
+			event_pixel(4, 1, 697, 7),
+		])
+
+		self.assertClientsReceived(self.clients, expected_events)
+
+	def test_214(self):
+		self.server = self.start_server(15)
+		self.clients = self.new_clients(["Ala215", "Bob215", "Cezary215"])
+
+		self.clients[0].send_message(1)
+		time.sleep(3)
+		self.clients[1].send_message(1)
+		self.clients[2].send_message(1)
+		time.sleep(MESSAGES_WAIT_TIME)
+
+		expected_events = communication.ServerMessage(15, [
+			event_new_game(0, 800, 600, ["Bob215", "Cezary215"]),
+			event_pixel(1, 0, 495, 528),
+			event_pixel(2, 1, 665, 474),
+			event_pixel(3, 0, 494, 529),
+			event_pixel(4, 1, 664, 475),
+		])
+
+		self.assertClientsReceived(self.clients[1:], expected_events)
+		self.assertEqual(self.clients[0].pull_events(), [], "Disconnected client0 received events.")
 
 
 if __name__ == '__main__':
