@@ -124,7 +124,7 @@ class TestServer200(unittest.TestCase):
 
 	def setUp(self) -> None:
 		self.next_session_id = 0
-		# for test_xxx, port = 2xxx.
+		# for test_xxx, server port = 20xxx.
 		self.port = 20000 + int(self._testMethodName.split("_")[1])
 
 	def tearDown(self):
