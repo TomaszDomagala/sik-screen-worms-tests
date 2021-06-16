@@ -314,6 +314,7 @@ class TestServer200(unittest.TestCase):
 		])
 
 		self.assertClientsReceived(self.clients[1:], expected_events)
+		self.assertEqual(self.clients[0].pull_events(), [])
 
 	def test_207(self):
 		"""
@@ -339,6 +340,7 @@ class TestServer200(unittest.TestCase):
 		])
 
 		self.assertClientsReceived(self.clients[1:], expected_events)
+		self.assertEqual(self.clients[0].pull_events(), [])
 
 	def test_208(self):
 		"""
@@ -363,7 +365,8 @@ class TestServer200(unittest.TestCase):
 			event_pixel(4, 1, 239, 449),
 		])
 
-		self.assertClientsReceived(self.clients, expected_events)
+		self.assertClientsReceived(self.clients[1:], expected_events)
+		self.assertEqual(self.clients[0].pull_events(), [])
 
 	def test_209(self):
 		"""
@@ -390,6 +393,7 @@ class TestServer200(unittest.TestCase):
 		])
 
 		self.assertClientsReceived(self.clients[1:], expected_events)
+		self.assertEqual(self.clients[0].pull_events(), [])
 
 	def test_210(self):
 		"""
